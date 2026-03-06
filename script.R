@@ -12,6 +12,7 @@ library(dplyr)   # data wrangling
 library(purrr)   # functional programming
 library(lme4)    # multilevel modeling
 library(emmeans) # marginal means and marginal trends
+library(pbkrtest)
 
 # read data
 d <- read_excel("data/data.xlsx")
@@ -268,6 +269,7 @@ ggsave("plots/SGc_resid.png", width = 6, height = 5, dpi = 300, bg = "white")
 sg_mo <- lm(APHV_resid ~ SGc + sex, data = d)
 summary(sg_mo)
 confint(sg_mo)
+# -0.18 [0.33; 0.03]
 mean(d$APHV_resid[d$SGc == "low"], na.rm = TRUE)
 mean(d$APHV_resid[d$SGc == "high"], na.rm = TRUE)
 
