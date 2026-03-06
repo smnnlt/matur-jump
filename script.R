@@ -8,10 +8,10 @@
 # load packages
 library(readxl)  # data import
 library(ggplot2) # visualization
-library(lme4)    # multilevel modeling
+library(dplyr)   # data wrangling
 library(purrr)   # functional programming
-library(emmeans)
-library(dplyr)
+library(lme4)    # multilevel modeling
+library(emmeans) # marginal means and marginal trends
 
 # read data
 d <- read_excel("data/data.xlsx")
@@ -89,7 +89,7 @@ d$APHV_resid[d$sex == "m" & d$cat == "J"] <- mean(d$APHV[d$sex == "m" & d$cat ==
 d$APHV_resid[d$sex == "f" & d$cat == "J"] <- mean(d$APHV[d$sex == "f" & d$cat == "J"]) - d$APHV[d$sex == "f" & d$cat == "J"]
 
 # function to get model estimates
-run_mod <- function(param, data = d, plot = FALSE) {
+run_mod <- function(param, data = d) {
   # get parameter of interest
   data$out <- data[[param]]
   # compute polynoms before the model, so that emmeans work on the output
@@ -101,7 +101,7 @@ run_mod <- function(param, data = d, plot = FALSE) {
   ci <- confint(o)
   # calculate standardized coefficients
   bs <- effectsize::standardize_parameters(o, method = "basic")
-  b <- bs[bs$Parameter == "APHV_resid",2] # Parameter for dAPHV resid
+  b <- bs[bs$Parameter == "APHV_resid",2] # Parameter for APHV resid
   
   # get reference value to transform to percentages
   m <- mean(data$out, na.rm = TRUE)
@@ -128,30 +128,6 @@ run_mod <- function(param, data = d, plot = FALSE) {
     ci_up_int = ci["APHV_resid:CAc", 2] / m
   )
   
-  # option to create scatter plot
-  if (plot) {
-    ggplot(aes(APHV_resid, out_pct), data = data) +
-      geom_hline(yintercept = 0, color = "grey40") +
-      geom_vline(xintercept = 0, color = "grey40") +
-      geom_point() +
-      geom_smooth(aes(color = sex)) +
-      scale_y_continuous(
-        name = "Overperformance for biological age", 
-        labels = scales::label_percent()
-      ) +
-      scale_x_continuous(
-        name = "Difference from predicted biological age (y)"
-      ) +
-      theme_classic() +
-      theme(
-        panel.grid.major = element_line(color = "grey80")
-      )
-    ggsave(
-      paste0("plots/scatter_sex_", cat, "_", param, ".png"), 
-      width = 6, height = 5, dpi = 300, bg = "white"
-    )
-  }
-  
   attr(df, "mod") <- o
   attr(df, "mt") <- mt
   attr(df, "mm") <- mm
@@ -174,7 +150,6 @@ write.csv(l_jump, "effects_jump.csv", row.names = FALSE)
 
 # set signs for beta thresholds
 l_jump$beta_label <- ifelse(abs(l_jump$beta) > 0.3, "◊◊", ifelse(abs(l_jump$beta) > 0.1, "◊", ""))
-# set levels for interaction
 
 # plot model estimates (jump, without SU tests)
 ggplot(l_jump[1:11,], aes(x = reorder(name, es, decreasing = TRUE), y = es)) +
@@ -239,7 +214,7 @@ ggplot(s_jump[!s_jump$name %in% c("SUb", "SUs"),], aes(x = name, y = APHV_resid.
   scale_y_continuous(
     name = "Performance difference per 1-year\n increase in maturity offset", 
     labels = scales::label_percent(),
-    breaks = seq(from = -0.30, to = 0.15, by = 0.10)) +
+    breaks = seq(from = -0.05, to = 0.15, by = 0.05)) +
   theme_classic(base_size = 14) +
   theme(
     panel.grid.major.y = element_line(color = "grey80"),
@@ -290,15 +265,11 @@ ggplot(d[!is.na(d$SGc),], aes(CA, dAPHV_resid, color = SGc)) +
 
 ggsave("plots/SGc_resid.png", width = 6, height = 5, dpi = 300, bg = "white")
 
-lm(dAPHV_resid ~ SGc, data = d) |> summary()
-mean(d$dAPHV_resid[d$SGc == "low"], na.rm = TRUE)
-mean(d$dAPHV_resid[d$SGc == "high"], na.rm = TRUE)
-
-lm(dAPHV_resid ~ SGc, data = d) |> summary()
-
-ggplot(d, aes(CA, FOST, color = SGc)) +
-  geom_point(alpha = 0.5) +
-  facet_wrap(~sex)
+sg_mo <- lm(APHV_resid ~ SGc + sex, data = d)
+summary(sg_mo)
+confint(sg_mo)
+mean(d$APHV_resid[d$SGc == "low"], na.rm = TRUE)
+mean(d$APHV_resid[d$SGc == "high"], na.rm = TRUE)
 
 # test for differences in performance between groups
 test_SGc_diff <- function(var, data = d) {
@@ -306,12 +277,52 @@ test_SGc_diff <- function(var, data = d) {
   p <- poly(data$CAc, 2)
   data$CAc_p1 <- p[,1]
   data$CAc_p2 <- p[,2]
-  o <- lmerTest::lmer(out ~ CAc_p1 + CAc_p2 + sex + SGc + CAc_p1:sex + CAc_p2:sex + dAPHV_resid + dAPHV_resid:CAc + dAPHV_resid:sex + dAPHV_resid:CAc:sex + (1|ID), data = data)
+  o <- lmerTest::lmer(out ~ CAc_p1 + CAc_p2 + sex + SGc + CAc_p1:sex + CAc_p2:sex + APHV_resid + APHV_resid:CAc + APHV_resid:sex + APHV_resid:CAc:sex + (1|ID), data = data)
   so <- summary(o)
   sg <- as.data.frame(t(so$coefficients["SGclow",]))
-  sg$var <- var
-  sg
+  ci <- confint(o)
+  # calculate standardized coefficients
+  bs <- effectsize::standardize_parameters(o, method = "basic")
+  b <- bs[bs$Parameter == "SGclow",2] # Parameter for APHV resid
+  
+  # get reference value to transform to percentages
+  m <- mean(data$out, na.rm = TRUE)
+  out <- data.frame(
+    es = sg$Estimate / m,
+    ci_low = ci["SGclow",1] / m,
+    ci_up = ci["SGclow",2] / m,
+    var = var,
+    beta = b
+  )
+  out
 }
 
 # whether low performs worse than high
 sgcperf_jump <- lapply(vars_jump, test_SGc_diff, data = d) |> purrr::list_rbind()
+sgcperf_jump
+# reverse signs for scales on which lower values mean better performance
+sgcperf_jump[sgcperf_jump$var %in% c("0-10m", "10-30m", "0-30m", "30-60m", "0-60m"), c(1,2,3)] <- -1 * sgcperf_jump[sgcperf_jump$var %in% c("0-10m", "10-30m", "0-30m", "30-60m", "0-60m"), c(1,2,3)]
+sgcperf_jump[sgcperf_jump$var %in% c("0-10m", "10-30m", "0-30m", "30-60m", "0-60m"), c(2,3)] <- sgcperf_jump[sgcperf_jump$var %in% c("0-10m", "10-30m", "0-30m", "30-60m", "0-60m"), c(3,2)]
+
+# set signs for beta thresholds
+sgcperf_jump$beta_label <- ifelse(abs(sgcperf_jump$beta) > 0.3, "◊◊", ifelse(abs(sgcperf_jump$beta) > 0.1, "◊", ""))
+
+ggplot(sgcperf_jump[!sgcperf_jump$var %in% c("SUb", "SUs"),], aes(x = reorder(var, es, decreasing = TRUE), y = es)) +
+  geom_hline(yintercept = 0, color = "grey40") +
+  geom_point(size = 2) +
+  geom_errorbar(aes(ymin = ci_low, ymax = ci_up), width = 0.2, linewidth = 0.7) +
+  geom_text(aes(y = ci_up + 0.013, label = beta_label), size = 6) +
+  scale_x_discrete(name = "Variable") +
+  scale_y_continuous(
+    name = "Performance difference group 'low' compared to group 'high'", 
+    labels = scales::label_percent(),
+    breaks = seq(from = -0.20, to = 0.15, by = 0.05)) +
+  theme_classic(base_size = 14) +
+  theme(
+    panel.grid.major.y = element_line(color = "grey80"),
+    axis.text.x = element_text(size = 9),
+    axis.text.y = element_text(size = 9)
+  )
+
+ggsave("plots/performance_sg.jpg", width = 7, height = 4.6, dpi = 300, bg = "white")
+write.csv(sgcperf_jump, "performance_sg.csv")
