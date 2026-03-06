@@ -1,5 +1,6 @@
 # Analysis script for the manuscript
-# ""
+# "Beyond the Growth Spurt: Maturity Offset, Test Performance, and Later Squad 
+# Attainment in Youth Track and Field Jumpers"
 #
 # written by Simon Nolte
 # 
