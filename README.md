@@ -1,4 +1,4 @@
-# Project Repository for ""
+# Project Repository for "Maturity Offset, Test Performance, and Later Squad Attainment in post-APHV Youth Track and Field Jumpers: Age-Dependent and Test-Specific Patterns"
 
 <!-- [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.17591244.svg)](https://doi.org/10.5281/zenodo.17591244) -->
 
