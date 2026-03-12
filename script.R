@@ -7,19 +7,17 @@
 # script released under an MIT license
 
 # load packages
-library(readxl)  # data import
 library(ggplot2) # visualization
 library(dplyr)   # data wrangling
 library(purrr)   # functional programming
 library(lme4)    # multilevel modeling
 library(emmeans) # marginal means and marginal trends
-library(pbkrtest)
+library(pbkrtest)# confidence interval calculation
 
 # read data
-d <- read_excel("data/data.xlsx")
-
+d <- read.csv("data/data.csv")
 # rename columns
-colnames(d)[c(5, 10, 22:27)] <- c("cat", "dAPHV", "FJT", "FREQ", "SUs", "SUb", "M4x60", "D4x60")
+colnames(d)[c(12:16, 21)] <- c("0-10m", "10-30m", "0-30m", "30-60m", "0-60m", "12MR")
 # convert from tibble to data.frame
 d <- as.data.frame(d)
 
@@ -52,8 +50,8 @@ d <- d[d$dAPHV >= 1, ]
 ## PART 1.2 Descriptive statistics----------------------------------------------
 
 # get all variables
-vars <- colnames(d)[12:27]
-vars_jump <- vars[c(1:10, 11, 13, 14)]
+vars <- colnames(d)[12:24]
+vars_jump <- vars[1:13]
 
 # descriptive data
 desc_long <- d |>
@@ -87,8 +85,8 @@ write.csv(desc_long, "descriptive.csv")
 d$dAPHV_resid <- resid(lm(dAPHV ~ poly(CA, 2) + sex, data = d))
 # alternative approach: use predicted minus mean cohort specific APHV
 d$APHV_resid <- NA
-d$APHV_resid[d$sex == "m" & d$cat == "J"] <- mean(d$APHV[d$sex == "m" & d$cat == "J"]) - d$APHV[d$sex == "m" & d$cat == "J"]
-d$APHV_resid[d$sex == "f" & d$cat == "J"] <- mean(d$APHV[d$sex == "f" & d$cat == "J"]) - d$APHV[d$sex == "f" & d$cat == "J"]
+d$APHV_resid[d$sex == "m"] <- mean(d$APHV[d$sex == "m"]) - d$APHV[d$sex == "m"]
+d$APHV_resid[d$sex == "f"] <- mean(d$APHV[d$sex == "f"]) - d$APHV[d$sex == "f"]
 
 # function to get model estimates
 run_mod <- function(param, data = d) {
@@ -317,7 +315,7 @@ ggplot(sgcperf_jump[!sgcperf_jump$var %in% c("SUb", "SUs"),], aes(x = reorder(va
   geom_text(aes(y = ci_up + 0.013, label = beta_label), size = 6) +
   scale_x_discrete(name = "Variable") +
   scale_y_continuous(
-    name = "Performance difference group 'low' compared to group 'high'", 
+    name = "Performance difference group 'low'\n compared to group 'high'", 
     labels = scales::label_percent(),
     breaks = seq(from = -0.20, to = 0.15, by = 0.05)) +
   theme_classic(base_size = 14) +
